@@ -3,210 +3,110 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#08090b">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Bomberos NI">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/784/784115.png">
-    
-    <!-- Enlazamos el manifest -->
+
     <link rel="manifest" href="manifest.json">
 
-    <title>Alertas Bomberos</title>
+    <title>Alertas Bomberos · Nueva Imperial</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </head>
-<body class="voluntarios-body">
+<body>
 
-    <!-- VISTA 1: FEED DE EMERGENCIAS -->
-    <div id="view-feed" class="vol-view">
-        <div class="ios-nav">
-            <!-- Espacio vacío a la izquierda para centrar el título -->
-            <div style="width: 50px;"></div> 
-            <div class="ios-nav-title">Bomberos Nva. Imperial</div>
-            <!-- BOTÓN DE NOTIFICACIONES -->
-            <button class="ios-nav-btn" id="btn-activar-notif" onclick="activarNotificaciones()" style="font-size: 1.3rem;">🔊</button>
-        </div>
-        
-        <div class="ios-list" id="emergencies-list">
-            <div style="padding: 20px; text-align: center; color: #8E8E93;">Cargando emergencias...</div>
-        </div>
+    <div class="app">
+        <!-- BARRA SUPERIOR -->
+        <header class="appbar">
+            <h1 class="appbar__title">Bomberos<small>Nueva Imperial · Voluntarios</small></h1>
+            <div class="status-pill">
+                <span class="status-dot" id="status-dot"></span>
+                <span id="status-text">Conectando…</span>
+            </div>
+        </header>
+
+        <!-- FEED DE EMERGENCIAS -->
+        <main class="feed" id="feed">
+            <!-- skeleton / tickets renderizados por app.js -->
+        </main>
+
+        <!-- BOTÓN FLOTANTE: ACTIVAR ALERTAS -->
+        <button class="fab" id="fab-notif" aria-label="Activar alertas push">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            </svg>
+        </button>
     </div>
 
-    <!-- VISTA 2: DETALLE DE LA EMERGENCIA -->
-    <div id="view-detail" class="vol-view" style="transform: translateX(100%);">
-        <div class="ios-nav">
-            <button class="ios-nav-btn" onclick="cerrarDetalle()"><span>❮</span> Atrás</button>
-            <div class="ios-nav-title">Notificación</div>
-            <div style="width: 50px;"></div>
+    <!-- SHEET DE DETALLE -->
+    <div class="backdrop" id="backdrop"></div>
+    <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-hidden="true">
+        <div class="sheet__handle-zone" id="sheet-handle-zone">
+            <div class="sheet__handle"></div>
         </div>
 
-        <div style="display: flex; flex-direction: column; flex: 1; overflow-y: auto;">
-            <div class="detail-header">
-                <span class="shield">🛡️</span>
-                <h2>Bomberos Nueva Imperial</h2>
+        <div class="sheet__scroll" id="sheet-scroll">
+            <div class="sheet__header">
+                <div>
+                    <div class="sheet__eyebrow">Notificación de despacho</div>
+                    <div class="sheet__code" id="sheet-code"></div>
+                </div>
+                <button class="sheet__close" id="sheet-close" aria-label="Cerrar">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+                        <path d="M18 6 6 18M6 6l12 12"/>
+                    </svg>
+                </button>
             </div>
 
-            <div class="blue-banner" id="det-banner"></div>
-
-            <div class="detail-info">
-                <strong>Observaciones:</strong> <span id="det-obs">Ninguna</span><br>
-                <span id="det-atentado" style="color: #D32F2F; font-weight: bold; display: none;">¡DESPACHADO COMO POSIBLE ATENTADO!</span>
+            <div class="terminal">
+                <span class="terminal__time" id="terminal-time">--:--:--</span>
+                <span class="terminal__date" id="terminal-date">--/--/----</span>
             </div>
 
-            <div class="unit-badge-container" id="det-units"></div>
+            <div class="alert-banner" id="det-atentado">¡Despachado como posible atentado!</div>
 
-            <div class="map-buttons-row">
-                <button class="btn-map-grey" id="btn-waze">📍 Waze</button>
-                <button class="btn-map-grey" id="btn-gmaps">📍 Google Maps</button>
-                <button class="btn-map-grey" id="btn-amaps">📍 Apple Maps</button>
+            <div class="info-card">
+                <span class="info-card__label">Observaciones</span>
+                <div class="info-card__value" id="det-obs">Sin observaciones al despacho.</div>
             </div>
 
-            <div class="map-box">
+            <div class="units-row" id="det-units"></div>
+
+            <div class="map-actions">
+                <button class="action-btn" id="btn-waze">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21s-7-6.5-7-11a7 7 0 0 1 14 0c0 4.5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+                    Waze
+                </button>
+                <button class="action-btn" id="btn-gmaps">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21s-7-6.5-7-11a7 7 0 0 1 14 0c0 4.5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+                    Google Maps
+                </button>
+                <button class="action-btn" id="btn-amaps">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21s-7-6.5-7-11a7 7 0 0 1 14 0c0 4.5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+                    Apple Maps
+                </button>
+            </div>
+
+            <div class="map-card">
                 <div id="map-voluntarios"></div>
+                <button class="map-recenter" id="btn-recenter" aria-label="Centrar mapa">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+                </button>
             </div>
 
-            <div class="blue-footer" id="det-footer-time"></div>
+            <div class="sheet__footer" id="det-footer-time">—</div>
         </div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, query, orderBy, setDoc, doc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
-        import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-messaging.js";
-
-        const firebaseConfig = {
-            apiKey: "AIzaSyA-NIM0pbgU2w85mWFhqUEkbA3L0_NrimI",
-            authDomain: "despachador-58fb8.firebaseapp.com",
-            projectId: "despachador-58fb8",
-            storageBucket: "despachador-58fb8.firebasestorage.app",
-            messagingSenderId: "1024295745401",
-            appId: "1:1024295745401:web:8d49683a86a8b1ff7aa1a8"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const messaging = getMessaging(app);
-
-        window.activarNotificaciones = async function() {
-            try {
-                const permission = await Notification.requestPermission();
-                
-                if (permission === 'granted') {
-                    const currentToken = await getToken(messaging, { 
-                        vapidKey: 'BJAd0EQok-Gy4tA4ZkpvXinuLauwqk6cT70j-64zaFEj5tIgp2wLc81MFiN6tc_aspi2-TAiBoYkKJzozIAxcaw' 
-                    });
-
-                    if (currentToken) {
-                        await setDoc(doc(db, "tokens_voluntarios", currentToken), {
-                            token: currentToken,
-                            plataforma: navigator.userAgent,
-                            fecha_registro: Date.now()
-                        });
-
-                        document.getElementById('btn-activar-notif').innerText = '🔔';
-                        alert("¡Alertas activadas! Recibirás los despachos al instante.");
-                    } else {
-                        alert("No se pudo generar la llave del dispositivo.");
-                    }
-                } else {
-                    alert("Permiso denegado. No recibirás alarmas.");
-                }
-            } catch (error) {
-                console.error("Error activando push:", error);
-                alert("Error al activar las notificaciones. IMPORTANTE PARA iPHONE: Debes abrir esta página en Safari, presionar 'Compartir', luego 'Añadir a inicio' y hacer este proceso desde el ícono de la pantalla de inicio.");
-            }
-        };
-
-        onMessage(messaging, (payload) => {
-            alert(`🚨 ${payload.notification.title}\n${payload.notification.body}`);
-        });
-
-        let map = null;
-        let pin = null;
-
-        const q = query(collection(db, "emergencias_activas"), orderBy("timestamp", "desc"));
-        
-        onSnapshot(q, (snapshot) => {
-            const listContainer = document.getElementById('emergencies-list');
-            listContainer.innerHTML = '';
-            
-            if (snapshot.empty) {
-                listContainer.innerHTML = '<div style="padding: 20px; text-align: center; color: #8E8E93;">No hay emergencias en curso.</div>';
-                return;
-            }
-
-            snapshot.forEach(doc => {
-                const em = doc.data();
-                const timeStr = em.timestamp ? em.timestamp.toDate().toLocaleString('sv-SE').replace('T', ' ') : '';
-                const unitsStr = (em.units || []).join(', ');
-                
-                let item = document.createElement('div');
-                item.className = 'ios-list-item';
-                item.onclick = () => abrirDetalle(em);
-                
-                item.innerHTML = `
-                    <div class="ios-list-content">
-                        <span class="ios-list-date">${timeStr}</span>
-                        <div class="ios-list-title">${em.code} ${em.address} ${unitsStr}</div>
-                    </div>
-                    <span class="ios-list-arrow">›</span>
-                `;
-                listContainer.appendChild(item);
-            });
-        });
-
-        window.abrirDetalle = function(em) {
-            document.getElementById('view-feed').style.transform = 'translateX(-100%)';
-            document.getElementById('view-detail').style.transform = 'translateX(0)';
-
-            const unitsStr = (em.units || []).join(', ');
-            document.getElementById('det-banner').innerText = `${em.code} ${em.address} ${unitsStr}`;
-            document.getElementById('det-obs').innerText = em.obs || 'Sin observaciones al despacho.';
-            
-            const txtAtentado = document.getElementById('det-atentado');
-            if (em.isAtentado) { txtAtentado.style.display = 'block'; } else { txtAtentado.style.display = 'none'; }
-
-            const timeStr = em.timestamp ? em.timestamp.toDate().toLocaleString('sv-SE').replace('T', ' ') : '';
-            document.getElementById('det-footer-time').innerText = timeStr;
-
-            const unitsContainer = document.getElementById('det-units');
-            unitsContainer.innerHTML = '';
-            (em.units || []).forEach(u => {
-                let badge = document.createElement('div');
-                badge.className = 'unit-badge-dark';
-                badge.innerText = u;
-                unitsContainer.appendChild(badge);
-            });
-
-            let lat = em.markerLatLng ? em.markerLatLng.lat : -38.7446590;
-            let lng = em.markerLatLng ? em.markerLatLng.lng : -72.9521597;
-
-            document.getElementById('btn-waze').onclick = () => { window.location.href = `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`; };
-            document.getElementById('btn-gmaps').onclick = () => { window.location.href = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`; };
-            document.getElementById('btn-amaps').onclick = () => { window.location.href = `http://maps.apple.com/?daddr=${lat},${lng}`; };
-
-            setTimeout(() => {
-                if (!map) {
-                    map = L.map('map-voluntarios', { zoomControl: false });
-                    L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/{z}/{x}/{y}?access_token=pk.eyJ1Ijoiam9yZ2VsYW5kZXIiLCJhIjoiY21yazBmNngzMDBiNDJ5b2pkMjF3dHljbCJ9.cbcHOpTihe9Y-9l6HZHjAw', { maxZoom: 19 }).addTo(map);
-                }
-                
-                map.setView([lat, lng], 16);
-                if (pin) map.removeLayer(pin);
-                
-                pin = L.marker([lat, lng], {
-                    icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png', iconSize: [25, 41], iconAnchor: [12, 41] })
-                }).addTo(map);
-                
-                map.invalidateSize();
-            }, 350);
-        };
-
-        window.cerrarDetalle = function() {
-            document.getElementById('view-detail').style.transform = 'translateX(100%)';
-            document.getElementById('view-feed').style.transform = 'translateX(0)';
-        };
-    </script>
+    <script type="module" src="app.js"></script>
 </body>
 </html>

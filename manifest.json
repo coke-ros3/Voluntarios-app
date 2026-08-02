@@ -1,11 +1,12 @@
 {
-  "name": "Alertas Bomberos",
+  "name": "Alertas Bomberos Nueva Imperial",
   "short_name": "Alertas",
-  "description": "App de notificaciones para voluntarios.",
+  "description": "App de notificaciones para voluntarios de Bomberos Nueva Imperial.",
   "start_url": ".",
   "display": "standalone",
-  "background_color": "#111111",
-  "theme_color": "#111111",
+  "background_color": "#08090b",
+  "theme_color": "#08090b",
+  "orientation": "portrait",
   "icons": [
     {
       "src": "https://cdn-icons-png.flaticon.com/512/784/784115.png",
