@@ -1,4 +1,13 @@
 /* =======================================================
+   FIX: asegura que [hidden] siempre gane sobre display:flex/grid
+   de las clases (sin esto, la pantalla de "Conectando…" y otras
+   vistas nunca se ocultan aunque JS ponga hidden = true).
+   ======================================================= */
+[hidden] {
+    display: none !important;
+}
+
+/* =======================================================
    TOKENS
    ======================================================= */
 :root {
