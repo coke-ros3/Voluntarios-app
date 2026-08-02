@@ -1,8 +1,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import {
-    getFirestore, collection, onSnapshot, query, orderBy, setDoc, doc
+    getFirestore, collection, onSnapshot, query, orderBy, setDoc, deleteDoc, doc
 } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
-import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-messaging.js";
+import { getMessaging, getToken, deleteToken, onMessage } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-messaging.js";
 
 /* =======================================================
    CONFIGURACIÓN
@@ -18,6 +18,7 @@ const firebaseConfig = {
 const VAPID_KEY = "BJAd0EQok-Gy4tA4ZkpvXinuLauwqk6cT70j-64zaFEj5tIgp2wLc81MFiN6tc_aspi2-TAiBoYkKJzozIAxcaw";
 const DEFAULT_LATLNG = { lat: -38.7446590, lng: -72.9521597 }; // Nueva Imperial
 const RECENT_MINUTES = 15; // ventana para marcar un despacho como "reciente" en la lista
+const TOKEN_STORAGE_KEY = "bomberos_push_token"; // recuerda el token activo en este dispositivo
 
 /* =======================================================
    FIREBASE
@@ -292,18 +293,27 @@ function initOrUpdateMap(lat, lng) {
 /* =======================================================
    NOTIFICACIONES PUSH
    ======================================================= */
+const ICON_BELL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>';
+const ICON_CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+const ICON_BELL_OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13.73 21a2 2 0 0 1-3.46 0"/><path d="M18.63 13A17.89 17.89 0 0 1 18 8"/><path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14"/><path d="M18 8a6 6 0 0 0-9.33-5"/><path d="M2 2l20 20"/></svg>';
+
 function setFabState(state) {
+    // state: "idle" (inactivo) | "loading" | "active"
+    fabNotif.dataset.state = state;
     fabNotif.classList.toggle("is-active", state === "active");
     fabNotif.disabled = state === "loading";
-    fabNotif.innerHTML = state === "loading"
-        ? '<span class="spinner"></span>'
-        : state === "active"
-            ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>'
-            : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>';
+    fabNotif.setAttribute("aria-label", state === "active" ? "Desactivar alertas push" : "Activar alertas push");
+
+    if (state === "loading") {
+        fabNotif.innerHTML = '<span class="spinner"></span>';
+    } else if (state === "active") {
+        fabNotif.innerHTML = ICON_CHECK;
+    } else {
+        fabNotif.innerHTML = ICON_BELL;
+    }
 }
 
 async function activarNotificaciones() {
-    if (Notification.permission === "granted") return; // ya activo
     setFabState("loading");
 
     try {
@@ -329,6 +339,7 @@ async function activarNotificaciones() {
             fecha_registro: Date.now()
         });
 
+        localStorage.setItem(TOKEN_STORAGE_KEY, currentToken);
         setFabState("active");
     } catch (error) {
         console.error("Error activando push:", error);
@@ -337,9 +348,43 @@ async function activarNotificaciones() {
     }
 }
 
-fabNotif.addEventListener("click", activarNotificaciones);
+async function desactivarNotificaciones() {
+    const confirmado = confirm("¿Seguro que quieres desactivar las alertas? Ya no recibirás avisos de nuevos despachos en este dispositivo.");
+    if (!confirmado) return;
 
-if (Notification.permission === "granted") setFabState("active");
+    setFabState("loading");
+    const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
+
+    try {
+        if (storedToken) {
+            await deleteDoc(doc(db, "tokens_voluntarios", storedToken)).catch((err) => {
+                // Si el documento ya no existe o falla el borrado remoto, igual seguimos desactivando localmente
+                console.warn("No se pudo borrar el token en Firestore:", err);
+            });
+        }
+        await deleteToken(messaging).catch((err) => {
+            console.warn("No se pudo revocar el token en Firebase Messaging:", err);
+        });
+    } finally {
+        localStorage.removeItem(TOKEN_STORAGE_KEY);
+        setFabState("idle");
+    }
+}
+
+fabNotif.addEventListener("click", () => {
+    if (fabNotif.dataset.state === "active") {
+        desactivarNotificaciones();
+    } else if (fabNotif.dataset.state !== "loading") {
+        activarNotificaciones();
+    }
+});
+
+// Estado inicial: solo se considera "activo" si hay permiso Y un token registrado en este dispositivo
+if (Notification.permission === "granted" && localStorage.getItem(TOKEN_STORAGE_KEY)) {
+    setFabState("active");
+} else {
+    setFabState("idle");
+}
 
 onMessage(messaging, (payload) => {
     alert(`🚨 ${payload.notification?.title || "Alerta"}\n${payload.notification?.body || ""}`);
