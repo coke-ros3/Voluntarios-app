@@ -1,8 +1,11 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import {
-    getFirestore, collection, onSnapshot, query, orderBy, setDoc, deleteDoc, doc
+    getFirestore, collection, onSnapshot, query, orderBy, setDoc, deleteDoc, doc, getDoc
 } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 import { getMessaging, getToken, deleteToken, onMessage } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-messaging.js";
+import {
+    getAuth, setPersistence, browserLocalPersistence, onAuthStateChanged, signInWithEmailAndPassword, signOut
+} from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 
 /* =======================================================
    CONFIGURACIÓN
@@ -19,6 +22,7 @@ const VAPID_KEY = "BJAd0EQok-Gy4tA4ZkpvXinuLauwqk6cT70j-64zaFEj5tIgp2wLc81MFiN6t
 const DEFAULT_LATLNG = { lat: -38.7446590, lng: -72.9521597 }; // Nueva Imperial
 const RECENT_MINUTES = 15; // ventana para marcar un despacho como "reciente" en la lista
 const TOKEN_STORAGE_KEY = "bomberos_push_token"; // recuerda el token activo en este dispositivo
+const EMAIL_DOMAIN = "bomberosni.internal"; // dominio interno: el número de registro se traduce a un correo ficticio para Firebase Auth
 
 /* =======================================================
    FIREBASE
@@ -26,16 +30,44 @@ const TOKEN_STORAGE_KEY = "bomberos_push_token"; // recuerda el token activo en 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const messaging = getMessaging(app);
+const auth = getAuth(app);
+setPersistence(auth, browserLocalPersistence).catch((err) => console.warn("No se pudo fijar la persistencia de sesión:", err));
 
 /* =======================================================
    REFERENCIAS DOM
    ======================================================= */
 const $ = (id) => document.getElementById(id);
 
+const loadingScreen = $("loading-screen");
+
+const loginScreen = $("login-screen");
+const loginForm = $("login-form");
+const loginRegistro = $("login-registro");
+const loginPassword = $("login-password");
+const loginSubmit = $("login-submit");
+const loginError = $("login-error");
+
+const appShell = $("app-shell");
+const btnLogout = $("btn-logout");
+const userPill = $("user-pill");
+
 const feedEl = $("feed");
 const statusDot = $("status-dot");
 const statusText = $("status-text");
 const fabNotif = $("fab-notif");
+
+const tabbar = $("tabbar");
+const tabAlertas = $("tab-alertas");
+const tabDisponibilidad = $("tab-disponibilidad");
+const viewAlertas = $("view-alertas");
+const viewDisponibilidad = $("view-disponibilidad");
+
+const dispNombre = $("disp-nombre");
+const dispRegistro = $("disp-registro");
+const dispBanner = $("disp-banner");
+const dispEstadoActual = $("disp-estado-actual");
+const btnDisponible = $("btn-disponible");
+const btnFuera = $("btn-fuera");
 
 const backdrop = $("backdrop");
 const sheet = $("sheet");
@@ -76,6 +108,206 @@ function isRecent(ts) {
 }
 
 /* =======================================================
+   AUTENTICACIÓN
+   ======================================================= */
+let currentUser = null;
+let currentProfile = null;
+let authResolved = false;
+
+function hideLoadingScreen() {
+    if (!authResolved) {
+        authResolved = true;
+        loadingScreen.hidden = true;
+    }
+}
+
+function showLoginError(message) {
+    loginError.textContent = message;
+    loginError.classList.add("is-visible");
+}
+
+function hideLoginError() {
+    loginError.textContent = "";
+    loginError.classList.remove("is-visible");
+}
+
+function setLoginLoading(isLoading) {
+    loginSubmit.disabled = isLoading;
+    loginSubmit.textContent = isLoading ? "Ingresando…" : "Ingresar";
+}
+
+function friendlyAuthError(code) {
+    switch (code) {
+        case "auth/invalid-credential":
+        case "auth/wrong-password":
+        case "auth/user-not-found":
+            return "Número de registro o contraseña incorrectos.";
+        case "auth/too-many-requests":
+            return "Demasiados intentos. Espera unos minutos e inténtalo de nuevo.";
+        case "auth/network-request-failed":
+            return "Sin conexión a internet. Revisa tu red.";
+        default:
+            return "No se pudo iniciar sesión. Intenta nuevamente.";
+    }
+}
+
+loginForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    hideLoginError();
+
+    const registro = loginRegistro.value.trim();
+    const password = loginPassword.value;
+    if (!registro || !password) return;
+
+    setLoginLoading(true);
+    try {
+        const email = `${registro}@${EMAIL_DOMAIN}`;
+        await signInWithEmailAndPassword(auth, email, password);
+        loginPassword.value = "";
+    } catch (error) {
+        console.error("Error al iniciar sesión:", error);
+        showLoginError(friendlyAuthError(error.code));
+    } finally {
+        setLoginLoading(false);
+    }
+});
+
+btnLogout.addEventListener("click", () => {
+    if (confirm("¿Cerrar sesión en este dispositivo?")) {
+        signOut(auth).catch((err) => console.error("Error al cerrar sesión:", err));
+    }
+});
+
+onAuthStateChanged(auth, async (user) => {
+    if (user) {
+        try {
+            const profileSnap = await getDoc(doc(db, "bomberos", user.uid));
+            if (!profileSnap.exists()) {
+                showLoginError("Tu cuenta no tiene un perfil asignado. Contacta a Central.");
+                await signOut(auth);
+                hideLoadingScreen();
+                return;
+            }
+            currentUser = user;
+            currentProfile = profileSnap.data();
+            enterApp();
+        } catch (error) {
+            console.error("Error verificando perfil de bombero:", error);
+            showLoginError("No se pudo verificar tu cuenta. Intenta nuevamente.");
+            await signOut(auth).catch(() => {});
+        }
+    } else {
+        currentUser = null;
+        currentProfile = null;
+        exitApp();
+    }
+    hideLoadingScreen();
+});
+
+/* =======================================================
+   ENTRAR / SALIR DE LA APP
+   ======================================================= */
+let feedUnsubscribe = null;
+let dispoUnsubscribe = null;
+
+function enterApp() {
+    loginScreen.hidden = true;
+    appShell.hidden = false;
+    loginForm.reset();
+    hideLoginError();
+
+    const nombre = currentProfile.nombreCompleto || `Bombero ${currentProfile.numeroRegistro || ""}`;
+    userPill.textContent = nombre;
+
+    const esMaquinista = Boolean(currentProfile.esMaquinista);
+    tabDisponibilidad.hidden = !esMaquinista;
+
+    if (dispoUnsubscribe) { dispoUnsubscribe(); dispoUnsubscribe = null; }
+
+    if (esMaquinista) {
+        dispNombre.textContent = nombre;
+        dispRegistro.textContent = `Reg. ${currentProfile.numeroRegistro || "—"}`;
+        dispoUnsubscribe = onSnapshot(doc(db, "maquinistas", currentUser.uid), (snap) => {
+            updateDispBanner(snap.exists() ? snap.data().estado : null);
+        }, (err) => console.error("Error leyendo disponibilidad:", err));
+    } else {
+        switchTab("view-alertas");
+    }
+
+    startFeedListener();
+}
+
+function exitApp() {
+    appShell.hidden = true;
+    loginScreen.hidden = false;
+
+    closeSheet();
+    switchTab("view-alertas");
+
+    if (feedUnsubscribe) { feedUnsubscribe(); feedUnsubscribe = null; }
+    if (dispoUnsubscribe) { dispoUnsubscribe(); dispoUnsubscribe = null; }
+
+    feedEl.innerHTML = "";
+    setStatus("idle");
+}
+
+/* =======================================================
+   PESTAÑAS: ALERTAS / DISPONIBILIDAD
+   ======================================================= */
+function switchTab(viewId) {
+    [viewAlertas, viewDisponibilidad].forEach((view) => {
+        const active = view.id === viewId;
+        view.hidden = !active;
+        view.classList.toggle("is-active", active);
+    });
+    [tabAlertas, tabDisponibilidad].forEach((tab) => {
+        tab.classList.toggle("is-active", tab.dataset.view === viewId);
+    });
+}
+
+tabAlertas.addEventListener("click", () => switchTab("view-alertas"));
+tabDisponibilidad.addEventListener("click", () => switchTab("view-disponibilidad"));
+
+/* =======================================================
+   DISPONIBILIDAD (MAQUINISTAS)
+   ======================================================= */
+function updateDispBanner(estado) {
+    dispBanner.classList.remove("is-on", "is-off");
+    btnDisponible.classList.remove("is-selected");
+    btnFuera.classList.remove("is-selected");
+
+    if (estado === "disponible") {
+        dispBanner.classList.add("is-on");
+        dispEstadoActual.textContent = "Disponible";
+        btnDisponible.classList.add("is-selected");
+    } else if (estado === "fuera") {
+        dispBanner.classList.add("is-off");
+        dispEstadoActual.textContent = "Fuera de servicio";
+        btnFuera.classList.add("is-selected");
+    } else {
+        dispEstadoActual.textContent = "Sin reportar";
+    }
+}
+
+async function reportarDisponibilidad(estado) {
+    if (!currentUser || !currentProfile) return;
+    try {
+        await setDoc(doc(db, "maquinistas", currentUser.uid), {
+            nombre: currentProfile.nombreCompleto || "",
+            numeroRegistro: currentProfile.numeroRegistro || "",
+            estado,
+            timestamp: Date.now()
+        });
+    } catch (error) {
+        console.error("Error al reportar disponibilidad:", error);
+        alert("No se pudo actualizar tu estado. Revisa tu conexión e intenta nuevamente.");
+    }
+}
+
+btnDisponible.addEventListener("click", () => reportarDisponibilidad("disponible"));
+btnFuera.addEventListener("click", () => reportarDisponibilidad("fuera"));
+
+/* =======================================================
    ESTADO DE CONEXIÓN
    ======================================================= */
 function setStatus(state) {
@@ -91,7 +323,7 @@ function setStatus(state) {
     }
 }
 
-window.addEventListener("online", () => setStatus("live"));
+window.addEventListener("online", () => { if (currentUser) setStatus("live"); });
 window.addEventListener("offline", () => setStatus("offline"));
 
 /* =======================================================
@@ -110,61 +342,63 @@ function renderSkeleton(count = 4) {
     `).join("");
 }
 
-renderSkeleton();
-
 /* =======================================================
    FEED EN TIEMPO REAL
    ======================================================= */
 const emergencyCache = new Map();
-
 const feedQuery = query(collection(db, "emergencias_activas"), orderBy("timestamp", "desc"));
 
-onSnapshot(feedQuery, (snapshot) => {
-    setStatus(snapshot.metadata.fromCache ? "offline" : "live");
+function startFeedListener() {
+    if (feedUnsubscribe) feedUnsubscribe();
+    renderSkeleton();
 
-    if (snapshot.empty) {
-        feedEl.innerHTML = `
-            <div class="feed__empty">
-                <strong>Sin despachos activos</strong>
-                En cuanto se genere una nueva alerta, aparecerá aquí al instante.
-            </div>`;
-        return;
-    }
+    feedUnsubscribe = onSnapshot(feedQuery, (snapshot) => {
+        setStatus(snapshot.metadata.fromCache ? "offline" : "live");
 
-    emergencyCache.clear();
-    feedEl.innerHTML = "";
+        if (snapshot.empty) {
+            feedEl.innerHTML = `
+                <div class="feed__empty">
+                    <strong>Sin despachos activos</strong>
+                    En cuanto se genere una nueva alerta, aparecerá aquí al instante.
+                </div>`;
+            return;
+        }
 
-    snapshot.forEach((docSnap) => {
-        const em = docSnap.data();
-        emergencyCache.set(docSnap.id, em);
+        emergencyCache.clear();
+        feedEl.innerHTML = "";
 
-        const { time, date } = formatTimestamp(em.timestamp);
-        const units = em.units || [];
-        const recent = isRecent(em.timestamp);
+        snapshot.forEach((docSnap) => {
+            const em = docSnap.data();
+            emergencyCache.set(docSnap.id, em);
 
-        const item = document.createElement("div");
-        item.className = `ticket${recent ? " ticket--recent" : ""}`;
-        item.tabIndex = 0;
-        item.setAttribute("role", "button");
-        item.innerHTML = `
-            <div class="ticket__led"></div>
-            <div class="ticket__body">
-                <span class="ticket__time">${time} · ${date}</span>
-                <div class="ticket__title"><span class="code">${escapeHtml(em.code || "")}</span>${escapeHtml(em.address || "")}</div>
-                ${units.length ? `<div class="ticket__units">${units.map(u => `<span class="chip">${escapeHtml(u)}</span>`).join("")}</div>` : ""}
-            </div>
-            <svg class="ticket__chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
-        `;
-        const openThis = () => openSheet(em);
-        item.addEventListener("click", openThis);
-        item.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openThis(); } });
+            const { time, date } = formatTimestamp(em.timestamp);
+            const units = em.units || [];
+            const recent = isRecent(em.timestamp);
 
-        feedEl.appendChild(item);
+            const item = document.createElement("div");
+            item.className = `ticket${recent ? " ticket--recent" : ""}`;
+            item.tabIndex = 0;
+            item.setAttribute("role", "button");
+            item.innerHTML = `
+                <div class="ticket__led"></div>
+                <div class="ticket__body">
+                    <span class="ticket__time">${time} · ${date}</span>
+                    <div class="ticket__title"><span class="code">${escapeHtml(em.code || "")}</span>${escapeHtml(em.address || "")}</div>
+                    ${units.length ? `<div class="ticket__units">${units.map(u => `<span class="chip">${escapeHtml(u)}</span>`).join("")}</div>` : ""}
+                </div>
+                <svg class="ticket__chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+            `;
+            const openThis = () => openSheet(em);
+            item.addEventListener("click", openThis);
+            item.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openThis(); } });
+
+            feedEl.appendChild(item);
+        });
+    }, (error) => {
+        console.error("Error escuchando emergencias:", error);
+        setStatus("offline");
     });
-}, (error) => {
-    console.error("Error escuchando emergencias:", error);
-    setStatus("offline");
-});
+}
 
 /* =======================================================
    SHEET DE DETALLE
@@ -295,7 +529,6 @@ function initOrUpdateMap(lat, lng) {
    ======================================================= */
 const ICON_BELL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>';
 const ICON_CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
-const ICON_BELL_OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13.73 21a2 2 0 0 1-3.46 0"/><path d="M18.63 13A17.89 17.89 0 0 1 18 8"/><path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14"/><path d="M18 8a6 6 0 0 0-9.33-5"/><path d="M2 2l20 20"/></svg>';
 
 function setFabState(state) {
     // state: "idle" (inactivo) | "loading" | "active"
@@ -336,7 +569,9 @@ async function activarNotificaciones() {
         await setDoc(doc(db, "tokens_voluntarios", currentToken), {
             token: currentToken,
             plataforma: navigator.userAgent,
-            fecha_registro: Date.now()
+            fecha_registro: Date.now(),
+            uid: currentUser ? currentUser.uid : null,
+            numeroRegistro: currentProfile ? currentProfile.numeroRegistro || null : null
         });
 
         localStorage.setItem(TOKEN_STORAGE_KEY, currentToken);

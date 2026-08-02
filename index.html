@@ -22,19 +22,80 @@
 </head>
 <body>
 
-    <div class="app">
+    <!-- PANTALLA DE CARGA -->
+    <div class="loading-screen" id="loading-screen">
+        <div class="loading-spinner"></div>
+        <span>Conectando…</span>
+    </div>
+
+    <!-- PANTALLA DE LOGIN -->
+    <div class="login-screen" id="login-screen" hidden>
+        <form class="login-card" id="login-form">
+            <span class="shield-mark">🛡️</span>
+            <h1 class="login-title">Bomberos<small>Nueva Imperial</small></h1>
+
+            <label class="login-label" for="login-registro">Número de registro</label>
+            <input class="login-input" id="login-registro" type="text" inputmode="numeric" autocomplete="username" placeholder="Ej: 1234" required>
+
+            <label class="login-label" for="login-password">Contraseña</label>
+            <input class="login-input" id="login-password" type="password" autocomplete="current-password" placeholder="••••••••" required>
+
+            <button class="login-submit" id="login-submit" type="submit">Ingresar</button>
+            <div class="login-error" id="login-error"></div>
+            <p class="login-footer">¿No puedes ingresar? Contacta a Central para que revise tu cuenta.</p>
+        </form>
+    </div>
+
+    <div class="app" id="app-shell" hidden>
         <!-- BARRA SUPERIOR -->
         <header class="appbar">
-            <h1 class="appbar__title">Bomberos<small>Nueva Imperial · Voluntarios</small></h1>
-            <div class="status-pill">
-                <span class="status-dot" id="status-dot"></span>
-                <span id="status-text">Conectando…</span>
+            <div class="appbar__row">
+                <h1 class="appbar__title">Bomberos<small>Nueva Imperial · Voluntarios</small></h1>
+                <button class="icon-btn" id="btn-logout" aria-label="Cerrar sesión">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
+                </button>
+            </div>
+            <div class="appbar__row">
+                <div class="status-pill">
+                    <span class="status-dot" id="status-dot"></span>
+                    <span id="status-text">Conectando…</span>
+                </div>
+                <span class="user-pill" id="user-pill">—</span>
             </div>
         </header>
 
-        <!-- FEED DE EMERGENCIAS -->
-        <main class="feed" id="feed">
-            <!-- skeleton / tickets renderizados por app.js -->
+        <!-- VISTA: FEED DE EMERGENCIAS -->
+        <main class="feed tab-view is-active" id="view-alertas">
+            <div id="feed"></div>
+        </main>
+
+        <!-- VISTA: DISPONIBILIDAD (SOLO MAQUINISTAS) -->
+        <main class="tab-view" id="view-disponibilidad" hidden>
+            <div class="disp-wrap">
+                <div class="disp-profile">
+                    <span class="disp-profile__label">Conductor</span>
+                    <span class="disp-profile__name" id="disp-nombre">—</span>
+                    <span class="disp-profile__reg" id="disp-registro">Reg. —</span>
+                </div>
+
+                <div class="disp-banner" id="disp-banner">
+                    <span class="disp-banner__label">Estado actual</span>
+                    <span class="disp-banner__value" id="disp-estado-actual">Sin reportar</span>
+                </div>
+
+                <div class="disp-actions">
+                    <button class="disp-btn disp-btn--on" id="btn-disponible">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                        Estoy disponible
+                    </button>
+                    <button class="disp-btn disp-btn--off" id="btn-fuera">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                        Fuera de servicio
+                    </button>
+                </div>
+
+                <p class="disp-hint">Central ve este estado en tiempo real. Actualízalo apenas cambie tu disponibilidad para conducir.</p>
+            </div>
         </main>
 
         <!-- BOTÓN FLOTANTE: ACTIVAR ALERTAS -->
@@ -44,6 +105,18 @@
                 <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
             </svg>
         </button>
+
+        <!-- BARRA DE PESTAÑAS -->
+        <nav class="tabbar" id="tabbar">
+            <button class="tabbar__item is-active" id="tab-alertas" data-view="view-alertas">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                <span>Alertas</span>
+            </button>
+            <button class="tabbar__item" id="tab-disponibilidad" data-view="view-disponibilidad" hidden>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h3l3 3v5h-6V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+                <span>Disponibilidad</span>
+            </button>
+        </nav>
     </div>
 
     <!-- SHEET DE DETALLE -->
@@ -60,9 +133,7 @@
                     <div class="sheet__code" id="sheet-code"></div>
                 </div>
                 <button class="sheet__close" id="sheet-close" aria-label="Cerrar">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
-                        <path d="M18 6 6 18M6 6l12 12"/>
-                    </svg>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
                 </button>
             </div>
 
