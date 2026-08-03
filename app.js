@@ -459,7 +459,7 @@ function initOrUpdateMap(lat, lng) {
     if (!map) {
         map = L.map("map-voluntarios", { zoomControl: false, attributionControl: false });
         L.tileLayer(
-            "https://api.mapbox.com/styles/v1/mapbox/dark-v11/tiles/{z}/{x}/{y}?access_token=pk.eyJ1Ijoiam9yZ2VsYW5kZXIiLCJhIjoiY21yazBmNngzMDBiNDJ5b2pkMjF3dHljbCJ9.cbcHOpTihe9Y-9l6HZHjAw",
+            "https://api.mapbox.com/styles/v1/mapbox/light-v11/tiles/{z}/{x}/{y}?access_token=pk.eyJ1Ijoiam9yZ2VsYW5kZXIiLCJhIjoiY21yazBmNngzMDBiNDJ5b2pkMjF3dHljbCJ9.cbcHOpTihe9Y-9l6HZHjAw",
             { maxZoom: 19 }
         ).addTo(map);
     }
@@ -469,7 +469,7 @@ function initOrUpdateMap(lat, lng) {
     if (marker) map.removeLayer(marker);
     marker = L.marker([lat, lng], {
         icon: L.icon({
-            iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png",
+            iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png",
             iconSize: [25, 41],
             iconAnchor: [12, 41]
         })
