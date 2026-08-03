@@ -73,6 +73,10 @@ button {
     outline-offset: 2px;
 }
 
+[hidden] {
+    display: none !important;
+}
+
 .app {
     position: relative;
     width: 100vw;
