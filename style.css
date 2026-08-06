@@ -704,18 +704,8 @@ button {
 
 .sheet__shield {
     font-size: 2.1rem;
-    margin-bottom: 8px;
+    margin-bottom: 2px;
 }
-
-.sheet__code {
-    font-weight: 700;
-    font-size: 1.05rem;
-    line-height: 1.3;
-    color: var(--text-1);
-    overflow-wrap: anywhere;
-}
-
-.sheet__code .code { color: var(--accent); }
 
 .sheet__close {
     position: absolute;
@@ -735,29 +725,37 @@ button {
 
 .sheet__close svg { width: 14px; height: 14px; color: var(--text-2); }
 
-/* Reloj de despacho */
+/* Recuadro con la clave y dirección del despacho */
 .terminal {
     margin: 0 20px 16px;
     background: var(--navy);
     border-radius: var(--radius-md);
-    padding: 16px 18px;
+    padding: 18px 20px;
     display: flex;
-    align-items: baseline;
-    justify-content: center;
-    gap: 10px;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    text-align: center;
+}
+
+.terminal__code {
+    font-weight: 700;
+    font-size: 1.2rem;
+    line-height: 1.35;
+    color: var(--text-on-navy);
+    overflow-wrap: anywhere;
+}
+
+.terminal__code .code {
+    color: #6EA8FF;
+    font-weight: 800;
+    margin-right: 6px;
 }
 
 .terminal__time {
-    font-size: 1.5rem;
-    font-weight: 700;
-    letter-spacing: 0.3px;
-    color: var(--text-on-navy);
-    font-variant-numeric: tabular-nums;
-}
-
-.terminal__date {
-    font-size: 0.75rem;
+    font-size: 0.78rem;
     color: var(--text-on-navy-dim);
+    font-variant-numeric: tabular-nums;
 }
 
 .alert-banner {

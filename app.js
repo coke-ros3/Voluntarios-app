@@ -76,7 +76,6 @@ const sheetScroll = $("sheet-scroll");
 const sheetClose = $("sheet-close");
 const sheetCode = $("sheet-code");
 const terminalTime = $("terminal-time");
-const terminalDate = $("terminal-date");
 const detAtentado = $("det-atentado");
 const detObs = $("det-obs");
 const detUnits = $("det-units");
@@ -414,7 +413,6 @@ function openSheet(em) {
 
     sheetCode.innerHTML = `<span class="code">${escapeHtml(em.code || "")}</span>${escapeHtml(em.address || "")}`;
     terminalTime.textContent = time;
-    terminalDate.textContent = date;
     detObs.textContent = em.obs || "Sin observaciones al despacho.";
     detAtentado.classList.toggle("is-visible", Boolean(em.isAtentado));
     detFooterTime.textContent = full ? `Despacho registrado · ${full}` : "—";
@@ -547,6 +545,11 @@ function setFabState(state) {
 }
 
 async function activarNotificaciones() {
+    if (typeof Notification === "undefined") {
+        alert("Este navegador no soporta notificaciones push. En iPhone, ábrelo con Safari y agrégalo a tu pantalla de inicio antes de activarlas.");
+        return;
+    }
+
     setFabState("loading");
 
     try {
@@ -614,8 +617,14 @@ fabNotif.addEventListener("click", () => {
     }
 });
 
-// Estado inicial: solo se considera "activo" si hay permiso Y un token registrado en este dispositivo
-if (Notification.permission === "granted" && localStorage.getItem(TOKEN_STORAGE_KEY)) {
+// Estado inicial: solo se considera "activo" si el navegador soporta notificaciones,
+// hay permiso Y un token registrado en este dispositivo. Si "Notification" no existe
+// (algunos navegadores embebidos/webviews no lo soportan), no debe romper el resto de la app.
+const supportsNotifications = typeof Notification !== "undefined";
+if (!supportsNotifications) {
+    fabNotif.disabled = true;
+    fabNotif.style.opacity = "0.4";
+} else if (Notification.permission === "granted" && localStorage.getItem(TOKEN_STORAGE_KEY)) {
     setFabState("active");
 } else {
     setFabState("idle");

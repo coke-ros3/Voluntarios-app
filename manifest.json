@@ -4,10 +4,16 @@
   "description": "App de notificaciones para voluntarios de Bomberos Nueva Imperial.",
   "start_url": ".",
   "display": "standalone",
-  "background_color": "#08090b",
-  "theme_color": "#08090b",
+  "background_color": "#0A1931",
+  "theme_color": "#0A1931",
   "orientation": "portrait",
   "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/784/784115.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
     {
       "src": "https://cdn-icons-png.flaticon.com/512/784/784115.png",
       "sizes": "512x512",

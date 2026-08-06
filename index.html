@@ -24,6 +24,22 @@
         <span>Conectando…</span>
     </div>
 
+    <script>
+        // Vigía independiente del script principal: si algo falla (red, script bloqueado, etc.)
+        // y la app se queda "Conectando…" por más de 7 segundos, mostramos un botón para reintentar
+        // en vez de dejar al bombero con la pantalla pegada para siempre.
+        setTimeout(function () {
+            var ls = document.getElementById('loading-screen');
+            if (ls && !ls.hidden) {
+                ls.innerHTML =
+                    '<div style="color:#fff; text-align:center; padding:0 28px; font-size:0.85rem; line-height:1.6;">' +
+                    'No se pudo conectar.<br>Revisa tu internet y vuelve a intentar.' +
+                    '<br><br><button onclick="location.reload()" style="background:#0A58CA; color:#fff; border:none; padding:11px 22px; border-radius:10px; font-weight:700; font-size:0.85rem;">Reintentar</button>' +
+                    '</div>';
+            }
+        }, 7000);
+    </script>
+
     <!-- PANTALLA DE LOGIN -->
     <div class="login-screen" id="login-screen" hidden>
         <form class="login-card" id="login-form">
@@ -124,15 +140,14 @@
             <div class="sheet__header">
                 <div class="sheet__eyebrow">Bomberos Nueva Imperial</div>
                 <span class="sheet__shield">🛡️</span>
-                <div class="sheet__code" id="sheet-code"></div>
                 <button class="sheet__close" id="sheet-close" aria-label="Cerrar">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
                 </button>
             </div>
 
             <div class="terminal">
+                <div class="terminal__code" id="sheet-code"></div>
                 <span class="terminal__time" id="terminal-time">--:--:--</span>
-                <span class="terminal__date" id="terminal-date">--/--/----</span>
             </div>
 
             <div class="alert-banner" id="det-atentado">¡Despachado como posible atentado!</div>
