@@ -24,6 +24,30 @@ const RECENT_MINUTES = 15; // ventana para marcar un despacho como "reciente" en
 const TOKEN_STORAGE_KEY = "bomberos_push_token"; // recuerda el token activo en este dispositivo
 const EMAIL_DOMAIN = "bomberosni.internal"; // dominio interno: el número de registro se traduce a un correo ficticio para Firebase Auth
 
+// Mismo código de colores por tipo de clave que usa Central, para reconocer
+// el tipo de emergencia de un vistazo (rojo = estructural/apoyo, celeste = pastizal,
+// verde = rescate, naranja = químico/gas, gris = servicios/administrativo).
+const CODE_COLORS = {
+    "10-0":  { light: "#D32F2F", navy: "#FF6B6B" },
+    "10-1":  { light: "#D32F2F", navy: "#FF6B6B" },
+    "10-2":  { light: "#0288D1", navy: "#4FC3F7" },
+    "10-3-1": { light: "#F57C00", navy: "#FFB74D" },
+    "10-3-2": { light: "#8E24AA", navy: "#CE93D8" },
+    "10-3":  { light: "#1E8E3E", navy: "#66BB6A" },
+    "10-4":  { light: "#1E8E3E", navy: "#66BB6A" },
+    "10-5":  { light: "#F57C00", navy: "#FFB74D" },
+    "10-6":  { light: "#F57C00", navy: "#FFB74D" },
+    "10-9-1": { light: "#D32F2F", navy: "#FF6B6B" },
+    "10-12": { light: "#D32F2F", navy: "#FF6B6B" },
+    "10-14": { light: "#D32F2F", navy: "#FF6B6B" },
+};
+const DEFAULT_CODE_COLOR = { light: "#6B7280", navy: "#B0B7C0" };
+
+function getCodeColor(code) {
+    if (!code) return DEFAULT_CODE_COLOR;
+    return CODE_COLORS[code.trim()] || DEFAULT_CODE_COLOR;
+}
+
 /* =======================================================
    FIREBASE
    ======================================================= */
@@ -76,6 +100,7 @@ const sheetScroll = $("sheet-scroll");
 const sheetClose = $("sheet-close");
 const sheetCode = $("sheet-code");
 const terminalTime = $("terminal-time");
+const terminalBox = document.querySelector(".terminal");
 const detAtentado = $("det-atentado");
 const detObs = $("det-obs");
 const detUnits = $("det-units");
@@ -378,11 +403,13 @@ function startFeedListener() {
             item.className = `ticket${recent ? " ticket--recent" : ""}`;
             item.tabIndex = 0;
             item.setAttribute("role", "button");
+            const codeColor = getCodeColor(em.code);
+            item.style.setProperty("--code-color", codeColor.light);
             item.innerHTML = `
                 <div class="ticket__led"></div>
                 <div class="ticket__body">
                     <span class="ticket__time">${time} · ${date}</span>
-                    <div class="ticket__title"><span class="code">${escapeHtml(em.code || "")}</span>${escapeHtml(em.address || "")}</div>
+                    <div class="ticket__title"><span class="code" style="color:${codeColor.light}">${escapeHtml(em.code || "")}</span>${escapeHtml(em.address || "")}</div>
                     ${units.length ? `<div class="ticket__units">${units.map(u => `<span class="chip">${escapeHtml(u)}</span>`).join("")}</div>` : ""}
                 </div>
                 <svg class="ticket__chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
@@ -410,9 +437,11 @@ let mapInitTimer = null;
 function openSheet(em) {
     const { time, date, full } = formatTimestamp(em.timestamp);
     const units = em.units || [];
+    const codeColor = getCodeColor(em.code);
 
-    sheetCode.innerHTML = `<span class="code">${escapeHtml(em.code || "")}</span>${escapeHtml(em.address || "")}`;
+    sheetCode.innerHTML = `<span class="code" style="color:${codeColor.navy}">${escapeHtml(em.code || "")}</span>${escapeHtml(em.address || "")}`;
     terminalTime.textContent = time;
+    if (terminalBox) terminalBox.style.borderLeft = `4px solid ${codeColor.navy}`;
     detObs.textContent = em.obs || "Sin observaciones al despacho.";
     detAtentado.classList.toggle("is-visible", Boolean(em.isAtentado));
     detFooterTime.textContent = full ? `Despacho registrado · ${full}` : "—";
