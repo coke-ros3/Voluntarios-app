@@ -389,7 +389,7 @@ button {
     padding: 15px 15px 15px 13px;
     cursor: pointer;
     box-shadow: var(--shadow-card);
-    border-left: 3px solid transparent;
+    border-left: 4px solid var(--code-color, var(--hairline));
     transition: transform 0.15s var(--ease), background-color 0.15s;
 }
 
@@ -398,18 +398,18 @@ button {
     background: var(--surface-2);
 }
 
-.ticket--recent { border-left-color: var(--accent); }
-
 .ticket__led {
     margin-top: 6px;
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: var(--text-3);
+    background: var(--code-color, var(--text-3));
     flex-shrink: 0;
 }
 
-.ticket--recent .ticket__led { background: var(--accent); }
+.ticket--recent .ticket__led {
+    animation: pulse-dot 2.2s infinite;
+}
 
 .ticket__body { flex: 1; min-width: 0; }
 
