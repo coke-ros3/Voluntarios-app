@@ -259,6 +259,12 @@ function enterApp() {
     }
 
     startFeedListener();
+
+    if (esAppNativa && tokenNativoPendiente) {
+        const t = tokenNativoPendiente;
+        tokenNativoPendiente = null;
+        guardarTokenNativo(t);
+    }
 }
 
 function exitApp() {
@@ -365,6 +371,40 @@ function renderSkeleton(count = 4) {
         </div>
     `).join("");
 }
+
+/* =======================================================
+   PUENTE CON LA APP NATIVA DE ANDROID
+   ======================================================= */
+const bridge = window.AndroidBridge;
+const esAppNativa = !!(bridge && bridge.esAppNativa && bridge.esAppNativa());
+
+let tokenNativoPendiente = null;
+
+async function guardarTokenNativo(token) {
+    if (!token) return;
+    // Si el token llega antes de que termine el login, lo dejamos en espera.
+    if (!currentUser) {
+        tokenNativoPendiente = token;
+        return;
+    }
+    try {
+        await setDoc(doc(db, "tokens_voluntarios", token), {
+            token,
+            plataforma: "android-nativo",
+            fecha_registro: Date.now(),
+            uid: currentUser.uid,
+            numeroRegistro: currentProfile ? currentProfile.numeroRegistro || null : null
+        });
+        localStorage.setItem(TOKEN_STORAGE_KEY, token);
+        setFabState("active");
+    } catch (error) {
+        console.error("No se pudo registrar el token nativo:", error);
+        setFabState("idle");
+    }
+}
+
+// La app nativa llama a esto apenas tiene el token de FCM.
+window.onTokenAndroid = (token) => guardarTokenNativo(token);
 
 /* =======================================================
    FEED EN TIEMPO REAL
@@ -574,6 +614,23 @@ function setFabState(state) {
 }
 
 async function activarNotificaciones() {
+    if (esAppNativa) {
+        setFabState("loading");
+        bridge.pedirPermisoNotificaciones();
+        const token = bridge.obtenerToken();
+        if (token) {
+            await guardarTokenNativo(token);
+        } else {
+            // El token llegará por window.onTokenAndroid en unos segundos.
+            setTimeout(() => {
+                const t2 = bridge.obtenerToken();
+                if (t2) guardarTokenNativo(t2);
+                else setFabState("idle");
+            }, 2500);
+        }
+        return;
+    }
+
     if (typeof Notification === "undefined") {
         alert("Este navegador no soporta notificaciones push. En iPhone, ábrelo con Safari y agrégalo a tu pantalla de inicio antes de activarlas.");
         return;
@@ -623,6 +680,12 @@ async function desactivarNotificaciones() {
     const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
 
     try {
+        if (esAppNativa) {
+            localStorage.removeItem(TOKEN_STORAGE_KEY);
+            setFabState("idle");
+            return;
+        }
+
         if (storedToken) {
             await deleteDoc(doc(db, "tokens_voluntarios", storedToken)).catch((err) => {
                 // Si el documento ya no existe o falla el borrado remoto, igual seguimos desactivando localmente
@@ -649,10 +712,12 @@ fabNotif.addEventListener("click", () => {
 // Estado inicial: solo se considera "activo" si el navegador soporta notificaciones,
 // hay permiso Y un token registrado en este dispositivo. Si "Notification" no existe
 // (algunos navegadores embebidos/webviews no lo soportan), no debe romper el resto de la app.
-const supportsNotifications = typeof Notification !== "undefined";
+const supportsNotifications = esAppNativa || typeof Notification !== "undefined";
 if (!supportsNotifications) {
     fabNotif.disabled = true;
     fabNotif.style.opacity = "0.4";
+} else if (esAppNativa) {
+    setFabState(bridge.notificacionesActivas() && localStorage.getItem(TOKEN_STORAGE_KEY) ? "active" : "idle");
 } else if (Notification.permission === "granted" && localStorage.getItem(TOKEN_STORAGE_KEY)) {
     setFabState("active");
 } else {
@@ -660,5 +725,6 @@ if (!supportsNotifications) {
 }
 
 onMessage(messaging, (payload) => {
+    if (esAppNativa) return; // la alarma nativa ya se encarga
     alert(`🚨 ${payload.notification?.title || "Alerta"}\n${payload.notification?.body || ""}`);
 });
